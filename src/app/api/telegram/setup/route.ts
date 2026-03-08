@@ -32,9 +32,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             message: 'Webhook registered successfully',
         });
     } catch (error) {
-        console.error('Failed to set webhook:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Failed to set webhook:', errorMessage);
         return NextResponse.json(
-            { ok: false, error: 'Failed to set webhook' },
+            { ok: false, error: `Failed to set webhook: ${errorMessage}` },
             { status: 500 }
         );
     }
