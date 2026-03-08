@@ -13,14 +13,30 @@ if (!TELEGRAM_BOT_TOKEN) {
 
 const bot = new Bot(TELEGRAM_BOT_TOKEN);
 
+let isBotInitialized = false;
+
+/**
+ * Ensures the bot is initialized before handling updates.
+ * grammY requires bot.init() in webhook/serverless mode
+ * to fetch bot info (username, id) from Telegram API.
+ */
+async function ensureBotInitialized(): Promise<void> {
+    if (isBotInitialized) {
+        return;
+    }
+    await bot.init();
+    isBotInitialized = true;
+}
+
 export const telegramAdapter: ITelegramBotAdapter = {
     async sendMessage(
         chatId: string,
         text: string,
         options?: MessageOptions
     ): Promise<void> {
+        await ensureBotInitialized();
         await bot.api.sendMessage(chatId, text, {
-            parse_mode: options?.parseMode ?? 'MarkdownV2',
+            parse_mode: options?.parseMode ?? 'Markdown',
             reply_markup: options?.replyMarkup as never,
         });
     },
@@ -32,6 +48,7 @@ export const telegramAdapter: ITelegramBotAdapter = {
     },
 
     async handleUpdate(update: unknown): Promise<void> {
+        await ensureBotInitialized();
         await bot.handleUpdate(update as Parameters<typeof bot.handleUpdate>[0]);
     },
 };
