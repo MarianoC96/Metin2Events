@@ -44,10 +44,17 @@ export interface EventTypeWithTranslation {
     readonly translatedName: string;
 }
 
+export interface EventTypeWithSchedule extends EventTypeWithTranslation {
+    /** Start time of the next occurrence in CET (HH:mm), null if none */
+    readonly nextStartTime: string | null;
+    /** Date of the next occurrence (YYYY-MM-DD), null if none */
+    readonly nextEventDate: string | null;
+}
+
 // ─── Adapter Interfaces ─────────────────────────────────────────
 
 export interface MessageOptions {
-    readonly parseMode?: 'HTML' | 'MarkdownV2';
+    readonly parseMode?: 'HTML' | 'Markdown' | 'MarkdownV2';
     readonly replyMarkup?: unknown;
 }
 

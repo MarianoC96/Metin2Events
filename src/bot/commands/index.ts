@@ -9,6 +9,7 @@ import { registerSubscribeCommand } from './subscribe';
 import { registerHelpCommand } from './help';
 import { registerLanguageCommand } from './language';
 import { registerNextCommand } from './next';
+import { registerClearCommand } from './clear';
 
 /**
  * Registers all bot commands on the grammY Bot instance.
@@ -21,6 +22,8 @@ export function registerAllCommands(): void {
     registerEventsCommand(bot);
     registerSubscribeCommand(bot);
     registerNextCommand(bot);
+    registerClearCommand(bot);
     registerLanguageCommand(bot);
     registerHelpCommand(bot);
 }
+

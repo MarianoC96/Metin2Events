@@ -108,6 +108,23 @@ export function minutesUntil(
 }
 
 /**
+ * Formats a total-minutes value into a compact countdown string.
+ * Examples: 185 → '3h 05min', 12 → '12min', 0 → '0min'
+ * Negative values return '0min' (already started).
+ */
+export function formatCountdown(totalMinutes: number): string {
+    const clamped = Math.max(0, totalMinutes);
+    const hours = Math.floor(clamped / 60);
+    const minutes = clamped % 60;
+
+    if (hours === 0) {
+        return `${minutes}min`;
+    }
+    const paddedMinutes = String(minutes).padStart(2, '0');
+    return `${hours}h ${paddedMinutes}min`;
+}
+
+/**
  * Resolves shorthand timezone names to IANA identifiers.
  * CET → Europe/Berlin (canonical IANA for Central European Time)
  */

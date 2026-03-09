@@ -4,9 +4,9 @@
 
 import { db } from '@/db/client';
 import { events, eventTypes, eventTypeTranslations } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, gte, asc } from 'drizzle-orm';
 import { parseEventSchedule, extractUniqueEventTypes, generateSlug } from './event-parser';
-import type { EventTypeWithTranslation } from '@/lib/types';
+import type { EventTypeWithTranslation, EventTypeWithSchedule } from '@/lib/types';
 import { APP_CONFIG } from '@/lib/constants';
 import { formatDateInTimezone, now } from '@/lib/timezone';
 
@@ -14,17 +14,19 @@ import { formatDateInTimezone, now } from '@/lib/timezone';
  * Imports events from raw text, handling deduplication of event types.
  * If an event_type already exists (by slug), it is reused.
  * If an event (same type + date + time) already exists, it is skipped.
- * Returns the count of newly created events.
+ * Returns the count of newly created events and the names of new types.
  */
 export async function importEventsFromText(text: string): Promise<{
     readonly eventsCreated: number;
     readonly eventsSkipped: number;
     readonly eventTypesCreated: number;
+    readonly newEventTypeNames: readonly string[];
 }> {
     const schedules = parseEventSchedule(text);
     const uniqueTypes = extractUniqueEventTypes(schedules);
 
     let eventTypesCreated = 0;
+    const newEventTypeNames: string[] = [];
 
     // Upsert event types (deduplication by slug)
     for (const type of uniqueTypes) {
@@ -41,6 +43,7 @@ export async function importEventsFromText(text: string): Promise<{
                 emoji: type.emoji,
             });
             eventTypesCreated++;
+            newEventTypeNames.push(type.name);
         }
     }
 
@@ -92,8 +95,9 @@ export async function importEventsFromText(text: string): Promise<{
         }
     }
 
-    return { eventsCreated, eventsSkipped, eventTypesCreated };
+    return { eventsCreated, eventsSkipped, eventTypesCreated, newEventTypeNames };
 }
+
 
 /**
  * Fetches today's events with typed translations for a given locale.
@@ -168,6 +172,53 @@ export async function fetchAllEventTypes(locale: string = APP_CONFIG.DEFAULT_LOC
         emoji: row.emoji ?? '🎮',
         translatedName: row.translatedName ?? row.name,
     }));
+}
+
+/**
+ * Fetches all event types enriched with their next scheduled occurrence.
+ * Used by the subscribe menu to display start time and countdown.
+ * Looks for events today or in the future, picking the earliest per type.
+ */
+export async function fetchAllEventTypesWithSchedule(
+    locale: string = APP_CONFIG.DEFAULT_LOCALE
+): Promise<readonly EventTypeWithSchedule[]> {
+    const todayStr = formatDateInTimezone(now(), APP_CONFIG.EVENT_SOURCE_TIMEZONE);
+
+    // Fetch all event types with translations
+    const allTypes = await fetchAllEventTypes(locale);
+
+    // Fetch upcoming events (today and future), ordered by date + start time
+    const upcomingEvents = await db
+        .select({
+            eventTypeId: events.eventTypeId,
+            eventDate: events.eventDate,
+            startTime: events.startTime,
+        })
+        .from(events)
+        .where(gte(events.eventDate, todayStr))
+        .orderBy(asc(events.eventDate), asc(events.startTime));
+
+    // Build a map: eventTypeId → first upcoming occurrence
+    const nextOccurrenceMap = new Map<number, { startTime: string; eventDate: string }>();
+
+    for (const event of upcomingEvents) {
+        if (nextOccurrenceMap.has(event.eventTypeId)) {
+            continue;
+        }
+        nextOccurrenceMap.set(event.eventTypeId, {
+            startTime: event.startTime,
+            eventDate: event.eventDate,
+        });
+    }
+
+    return allTypes.map((type) => {
+        const next = nextOccurrenceMap.get(type.id) ?? null;
+        return {
+            ...type,
+            nextStartTime: next?.startTime ?? null,
+            nextEventDate: next?.eventDate ?? null,
+        };
+    });
 }
 
 /**

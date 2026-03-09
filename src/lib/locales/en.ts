@@ -5,13 +5,14 @@ import type { LocaleStrings } from './types';
 const en: LocaleStrings = {
     bot: {
         welcome: (name: string) =>
-            `🎮 Welcome, *${name}*!\n\nI'm the Metin2 Events Bot. I'll notify you before each event starts so you never miss one.\n\n🔔 Use /subscribe to pick your events\n📋 Use /events to see today's schedule\n🌐 Use /language to change language`,
+            `🎮 Welcome, *${name}*!\n\nI'm the Metin2 Events Bot. I'll notify you before each event starts so you never miss one.\n\n🔔 Use /subscribe to pick your events\n📋 Use /events to see today's schedule\n⏭️ Use /next to see the next event\n🌐 Use /language to change language`,
         help: `📖 *Available commands:*\n
 /events — Today's events
-/next — Next event
+/next or /siguiente — Next event
 /subscribe — Choose favorite events
 /unsubscribe — Cancel subscriptions
 /mysubs — View your subscriptions
+/clear or /limpiar — Clear the chat
 /language — Change language
 /help — This help`,
         noEventsToday: '📭 No events scheduled for today.',
@@ -33,6 +34,14 @@ const en: LocaleStrings = {
         eventListHeader: (date: string) => `📅 *Events for ${date}:*\n`,
         eventRow: (emoji: string, name: string, start: string, end: string) =>
             `${emoji} ${name}\n    🕐 ${start} — ${end}`,
+        countdown: (startTime: string, remaining: string) =>
+            `(${startTime} - in ${remaining})`,
+        eventLive: '(🔴 LIVE)',
+        eventNoSchedule: '',
+        chatCleared: (name: string) =>
+            `🧹 *Chat cleared, ${name}!*\n\nYour subscriptions are still active.\n\n🔔 /subscribe — Pick events\n📋 /events — Today's events\n⏭️ /next — Next event\n📖 /help — Help`,
+        newEventsAlert: (eventList: string, count: number) =>
+            `🆕 *${count === 1 ? 'New event available' : `${count} new events available`}!*\n\n${eventList}\n\n🔔 Use /subscribe to subscribe.`,
     },
     notifications: {
         alert30min: (emoji: string, name: string, start: string, end: string) =>

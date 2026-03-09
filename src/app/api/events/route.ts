@@ -1,8 +1,11 @@
 // ─── Events API Route ───────────────────────────────────────────
 // REST API for managing events from the admin dashboard.
+// When new event types are imported, all active users are notified.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { importEventsFromText, fetchTodayEvents, countEvents, countEventTypes } from '@/domain/event-service';
+import { notifyUsersAboutNewEventTypes } from '@/domain/new-events-notifier';
+import { telegramAdapter } from '@/bot/telegram-adapter';
 import { APP_CONFIG } from '@/lib/constants';
 
 /**
@@ -41,6 +44,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 /**
  * POST /api/events — Imports events from raw text
  * Body: { text: string }
+ * When new event types are detected, notifies all active users.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
@@ -56,6 +60,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         const result = await importEventsFromText(text);
 
+        // Fire-and-forget: notify users about new event types
+        // Runs in background to avoid blocking the API response
+        if (result.newEventTypeNames.length > 0) {
+            notifyUsersAboutNewEventTypes(telegramAdapter, result.newEventTypeNames)
+                .then((notifyResult) => {
+                    console.log(
+                        `New event types notification: ${notifyResult.usersNotified} users notified, ${notifyResult.errors} errors`
+                    );
+                })
+                .catch((error) => {
+                    console.error('Failed to notify users about new event types:', error);
+                });
+        }
+
         return NextResponse.json({
             ok: true,
             data: result,
@@ -68,3 +86,4 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         );
     }
 }
+

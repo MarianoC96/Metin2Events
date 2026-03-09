@@ -22,6 +22,11 @@ export interface LocaleStrings {
         readonly alreadySubscribed: (name: string) => string;
         readonly eventListHeader: (date: string) => string;
         readonly eventRow: (emoji: string, name: string, start: string, end: string) => string;
+        readonly countdown: (startTime: string, remaining: string) => string;
+        readonly eventLive: string;
+        readonly eventNoSchedule: string;
+        readonly chatCleared: (name: string) => string;
+        readonly newEventsAlert: (eventList: string, count: number) => string;
     };
     readonly notifications: {
         readonly alert30min: (emoji: string, name: string, start: string, end: string) => string;

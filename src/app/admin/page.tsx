@@ -18,7 +18,42 @@ interface ImportResult {
     eventTypesCreated: number;
 }
 
+interface PreviewMessage {
+    command: string;
+    label: string;
+    content: string;
+}
+
+interface SubscribeButton {
+    emoji: string;
+    name: string;
+    scheduleSuffix: string;
+}
+
+interface BotPreviewData {
+    previews: PreviewMessage[];
+    subscribe: {
+        message: PreviewMessage;
+        buttons: SubscribeButton[];
+    };
+    locale: string;
+    timezone: string;
+    generatedAt: string;
+}
+
 type ViewState = 'idle' | 'loading' | 'success' | 'error';
+
+// ─── Helpers ────────────────────────────────────────────────────
+
+/**
+ * Converts markdown bold (*text*) to HTML <strong> and newlines to <br/>.
+ * Only supports a safe subset used by the bot strings.
+ */
+function markdownToHtml(text: string): string {
+    return text
+        .replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br/>');
+}
 
 // ─── Admin Dashboard Page ───────────────────────────────────────
 
@@ -31,6 +66,23 @@ export default function AdminPage() {
     const [importError, setImportError] = useState<string>('');
     const [webhookState, setWebhookState] = useState<ViewState>('idle');
     const [webhookMessage, setWebhookMessage] = useState('');
+
+    // Preview state
+    const [previewData, setPreviewData] = useState<BotPreviewData | null>(null);
+    const [previewState, setPreviewState] = useState<ViewState>('loading');
+    const [activePreviewTab, setActivePreviewTab] = useState(0);
+
+    // Client-only time to avoid SSR hydration mismatch
+    const [displayTime, setDisplayTime] = useState('--:--');
+    useEffect(() => {
+        setDisplayTime(
+            new Date().toLocaleTimeString('es-PE', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+            })
+        );
+    }, [previewData, activePreviewTab]);
 
     const fetchStats = useCallback(async () => {
         setStatsState('loading');
@@ -48,9 +100,26 @@ export default function AdminPage() {
         }
     }, []);
 
+    const fetchPreview = useCallback(async () => {
+        setPreviewState('loading');
+        try {
+            const response = await fetch('/api/bot-preview');
+            const data = await response.json();
+            if (data.ok) {
+                setPreviewData(data.data);
+                setPreviewState('success');
+            } else {
+                setPreviewState('error');
+            }
+        } catch {
+            setPreviewState('error');
+        }
+    }, []);
+
     useEffect(() => {
         fetchStats();
-    }, [fetchStats]);
+        fetchPreview();
+    }, [fetchStats, fetchPreview]);
 
     const handleImportEvents = async () => {
         if (!eventText.trim()) {
@@ -74,6 +143,7 @@ export default function AdminPage() {
                 setImportState('success');
                 setEventText('');
                 fetchStats();
+                fetchPreview();
             } else {
                 setImportError(data.error ?? 'Import failed');
                 setImportState('error');
@@ -106,6 +176,22 @@ export default function AdminPage() {
             setWebhookState('error');
         }
     };
+
+    // Build the list of all tabs (message previews + subscribe)
+    const allTabs = previewData
+        ? [...previewData.previews.map((p) => p.label), previewData.subscribe.message.label]
+        : [];
+
+    // Determine the selected content
+    const isSubscribeTab = previewData
+        ? activePreviewTab === previewData.previews.length
+        : false;
+
+    const selectedPreview = previewData && !isSubscribeTab
+        ? previewData.previews[activePreviewTab]
+        : null;
+
+    const currentTime = displayTime;
 
     return (
         <div className={styles.container}>
@@ -157,6 +243,127 @@ export default function AdminPage() {
                             <span className={styles.statLabel}>Suscripciones</span>
                         </div>
                     </div>
+                )}
+            </section>
+
+            {/* ─── Bot Preview ──────────────────────────────────────────── */}
+            <section className={styles.previewSection}>
+                <div className={styles.previewHeader}>
+                    <div className={styles.previewHeaderLeft}>
+                        <h2 className={styles.sectionTitle}>📱 Vista Previa del Bot</h2>
+                        <p className={styles.sectionDescription}>
+                            Así se ve cada comando en Telegram. Los datos se obtienen en tiempo real.
+                        </p>
+                    </div>
+                    <button
+                        className={styles.previewRefreshButton}
+                        onClick={fetchPreview}
+                        disabled={previewState === 'loading'}
+                    >
+                        {previewState === 'loading' ? '⏳ Cargando...' : '🔄 Actualizar'}
+                    </button>
+                </div>
+
+                {/* Tabs */}
+                {previewState === 'success' && previewData && (
+                    <div className={styles.previewTabs}>
+                        {allTabs.map((label, index) => (
+                            <button
+                                key={label}
+                                className={`${styles.previewTab} ${activePreviewTab === index ? styles.previewTabActive : ''}`}
+                                onClick={() => setActivePreviewTab(index)}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* Chat Window */}
+                <div className={styles.chatWindow}>
+                    <div className={styles.chatHeader}>
+                        <div className={styles.chatAvatar}>🎮</div>
+                        <div>
+                            <div className={styles.chatBotName}>Metin2 Events Bot</div>
+                            <div className={styles.chatBotStatus}>bot</div>
+                        </div>
+                    </div>
+
+                    <div className={styles.chatBody}>
+                        {/* Loading State */}
+                        {previewState === 'loading' && (
+                            <div className={styles.previewSkeleton}>
+                                <div className={styles.previewSkeletonBubble} />
+                                <div className={styles.previewSkeletonBubble} />
+                                <div className={styles.previewSkeletonBubble} />
+                            </div>
+                        )}
+
+                        {/* Error State */}
+                        {previewState === 'error' && (
+                            <div className={styles.errorState}>
+                                <p>❌ Error al cargar la vista previa</p>
+                                <button onClick={fetchPreview} className={styles.retryButton}>
+                                    🔄 Reintentar
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Message Preview */}
+                        {previewState === 'success' && selectedPreview && (
+                            <>
+                                <div className={styles.chatUserCommand}>
+                                    {selectedPreview.command}
+                                    <div className={styles.chatTime}>{currentTime}</div>
+                                </div>
+                                <div className={styles.chatBubble}>
+                                    <span dangerouslySetInnerHTML={{
+                                        __html: markdownToHtml(selectedPreview.content)
+                                    }} />
+                                    <div className={styles.chatTime}>{currentTime}</div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Subscribe Preview */}
+                        {previewState === 'success' && isSubscribeTab && previewData && (
+                            <>
+                                <div className={styles.chatUserCommand}>
+                                    {previewData.subscribe.message.command}
+                                    <div className={styles.chatTime}>{currentTime}</div>
+                                </div>
+                                <div className={styles.chatBubble}>
+                                    <span dangerouslySetInnerHTML={{
+                                        __html: markdownToHtml(previewData.subscribe.message.content)
+                                    }} />
+                                    <div className={styles.chatTime}>{currentTime}</div>
+                                </div>
+                                <div className={styles.inlineKeyboard}>
+                                    {previewData.subscribe.buttons.map((btn) => {
+                                        const suffix = btn.scheduleSuffix ? ` ${btn.scheduleSuffix}` : '';
+                                        return (
+                                            <div key={btn.name} className={styles.inlineButton}>
+                                                ⬜ {btn.emoji} {btn.name}{suffix}
+                                            </div>
+                                        );
+                                    })}
+                                    <div className={styles.inlineButtonRow}>
+                                        <div className={styles.inlineButton}>✅ Suscribirme a TODOS</div>
+                                    </div>
+                                    <div className={styles.inlineButtonRow}>
+                                        <div className={styles.inlineButton}>❌ Cancelar TODAS mis suscripciones</div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* Generated timestamp */}
+                {previewState === 'success' && previewData && (
+                    <p className={styles.previewTimestamp}>
+                        Generado: {new Date(previewData.generatedAt).toLocaleString('es-PE')} · Zona: {previewData.timezone}
+                    </p>
                 )}
             </section>
 
